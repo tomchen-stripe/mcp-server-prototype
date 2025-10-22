@@ -39,6 +39,30 @@ After getting the schema, you MUST:
 ### Step 4: Invoke the Operation
 Call `invoke-api-endpoint` with the operationId and parameters based on the schema you just retrieved.
 
+**CRITICAL - PARAMETER EXTRACTION STEPS**:
+You MUST follow these exact steps to construct the parameters:
+
+1. Look at the schema response's `requestBody.content['application/x-www-form-urlencoded'].schema`
+2. Identify ALL `.properties` names (e.g., "name", "description", "email") and `.required` or nested required fields
+3. Look at the schema response's `example_invocation.parameters` - this shows you the EXACT structure
+4. Map values from the user's request to these parameter names
+5. Create a parameters object with those keys and the user's values
+6. Pass this object in the "parameters" field of invoke-api-endpoint
+
+**YOU MUST NOT**:
+- ❌ Pass an empty parameters object {}
+- ❌ Skip extracting parameters from the schema
+- ❌ Guess at parameter names without checking the schema
+- ❌ Put parameters in the wrong format
+
+**STEP-BY-STEP REASONING TEMPLATE**:
+When you get the schema response, think through:
+1. "What parameters does this operation accept?" → Look at requestBody properties
+2. "What values did the user provide?" → Parse the user's request
+3. "How do I map user values to parameter names?" → Match semantically
+4. "What is my parameters object?" → Construct {param_name: user_value}
+5. "Is my parameters object correct?" → Verify it matches example_invocation structure
+
 **Complete Example Workflow:**
 ```
 User Request: "Create a customer with email test@example.com"
@@ -51,10 +75,23 @@ Step 2 (REQUIRED): get-api-endpoint-schema {"operationId": "PostCustomers"}
     "operationId": "PostCustomers",
     "description": "Creates a new customer object...",
     "parameters": [...],
-    "requestBody": { "properties": { "email": {...}, "name": {...}, ... } }
+    "requestBody": {
+      "content": {
+        "application/x-www-form-urlencoded": {
+          "schema": {
+            "properties": {
+              "email": {"type": "string"},
+              "name": {"type": "string"},
+              ...
+            }
+          }
+        }
+      }
+    }
   }
   → READ the description for best practices
-  → NOTE the required vs optional parameters
+  → NOTE the required vs optional parameters from requestBody.schema.properties
+  → EXTRACT parameter names like "email", "name" from the properties object
 
 Step 3 (REQUIRED): Follow best practices from description
 
@@ -62,7 +99,28 @@ Step 4: invoke-api-endpoint {
     "operationId": "PostCustomers",
     "parameters": {"email": "test@example.com"}
   }
+  → The "parameters" object contains the actual values for the parameter names found in the schema
   Returns: Created customer object
+```
+
+**Another Example - Creating a Product:**
+```
+User Request: "Create a product called 'Test Product' with description 'A test product'"
+
+Step 1: get-api-endpoint-schema {"operationId": "PostProducts"}
+  Returns schema with requestBody containing properties: {name, description, ...}
+
+Step 2: Extract parameter names from schema: "name" and "description" are available
+
+Step 3: invoke-api-endpoint {
+    "operationId": "PostProducts",
+    "parameters": {
+      "name": "Test Product",
+      "description": "A test product"
+    }
+  }
+  → Notice how the parameter names ("name", "description") match the schema properties
+  → Notice how the parameter values match what the user requested
 ```
 
 **Example of Following Best Practices:**

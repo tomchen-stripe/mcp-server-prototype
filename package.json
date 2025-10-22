@@ -21,6 +21,7 @@
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
         "express": "^4.21.1",
+        "https-proxy-agent": "^7.0.6",
         "jszip": "^3.10.1",
         "stripe": "^19.1.0",
         "zod": "^3.23.8",

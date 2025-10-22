@@ -8,6 +8,8 @@ import cors from 'cors';
 console.error('Starting Streamable HTTP server...');
 
 const app = express();
+// Note: Do NOT use express.json() middleware here
+// StreamableHTTPServerTransport needs to read the raw request stream
 app.use(cors({
     "origin": "*", // use "*" with caution in production
     "methods": "GET,POST,DELETE",
@@ -24,6 +26,7 @@ const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, S
 
 app.post('/mcp', async (req: Request, res: Response) => {
   console.error('Received MCP POST request');
+  console.error('Session ID from header:', req.headers['mcp-session-id']);
   try {
     // Check for existing session ID
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
