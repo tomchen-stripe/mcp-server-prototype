@@ -357,30 +357,6 @@ export const createServer = () => {
       },
     ];
 
-    // Extract all operations from top-level /v1/{resource} and /v1/{resource}/{id} paths
-    // Note: Currently commented out to limit the number of tools
-    // const operationIds = listAllOperationIds();
-    // for (const operationId of operationIds) {
-    //   const schema = getOperationSchema(operationId);
-    //   if (!schema) continue;
-    //
-    //   console.error('[log] adding tool: ', operationId);
-    //
-    //   // Build description from operation
-    //   const description = schema.description
-    //     ? schema.description.replace(/<[^>]*>/g, '').substring(0, 200)
-    //     : `${schema.method} ${schema.path}`;
-    //
-    //   // Extract the input schema from OpenAPI spec
-    //   const inputSchema = extractInputSchema(schema);
-    //
-    //   // tools.push({
-    //   //   name: operationId,
-    //   //   description: description,
-    //   //   inputSchema: inputSchema as ToolInput,
-    //   // });
-    // }
-
     console.error(`[MCP DEBUG] Returning ${tools.length} tools`);
     return { tools };
   });
