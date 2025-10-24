@@ -19,10 +19,11 @@ this is a prototype of an mcp server that dynamically populates 176 (out of 572)
 ### results
 
 Manual testing:
-✅ `update the prices of all my products to be 10 dollars more than they are` (5-6 step workflow):
+
+✅ Prompt: `update the prices of all my products to be 10 dollars more than they are` (5-6 step workflow):
 - [sample output](https://gist.github.com/tomchen-stripe/979642e8ff35a0299e7e675b597bfe48)
 
-[Next steps](#further-areas-of-investigation-for-this-approach) are to run more evals for this approach.
+Next steps are to run more evals for this approach.
 
 ### using with claude code (laptop or devbox)
 
