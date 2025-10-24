@@ -14,7 +14,7 @@
     "scripts": {
         "build": "tsc && shx mkdir -p dist/data && shx cp data/spec3.clean.json dist/data/ && shx cp instructions.txt dist/ && shx chmod +x dist/*.js",
         "watch": "tsc --watch",
-        "start": "node dist/index.js"
+        "start": "node dist/index.js 2> error.log"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.19.1",

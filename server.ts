@@ -8,6 +8,7 @@ import {
   CreateMessageResultSchema,
   ElicitResultSchema,
   GetPromptRequestSchema,
+  InitializeRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
@@ -320,6 +321,28 @@ export const createServer = () => {
 
     return result;
   }
+
+  // Log client info during initialization
+  server.setRequestHandler(InitializeRequestSchema, async (request) => {
+    console.error("[MCP DEBUG] Initialize request received");
+    console.error("[MCP DEBUG] Client Info:", JSON.stringify(request.params.clientInfo, null, 2));
+
+    // Return the default initialization response
+    // The SDK will handle the actual initialization logic
+    return {
+      protocolVersion: "2024-11-05",
+      capabilities: {
+        prompts: {},
+        resources: { subscribe: true },
+        tools: {},
+        logging: {},
+      },
+      serverInfo: {
+        name: "mcp-server-prototype",
+        version: "0.0.1",
+      },
+    };
+  });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     console.error("[MCP DEBUG] ListTools request received");

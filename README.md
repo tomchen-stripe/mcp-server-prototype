@@ -1,16 +1,22 @@
 ### about
-this is a prototype for populating more, or all, of Stripe's API endpoints into an MCP server as three meta tools:
+this is a prototype of an mcp server that dynamically populates 176 (out of 572) of Stripe's APIs through three MCP metatools:
 
 - list-api-endpoints
 - get-api-endpoint-schema
 - invoke-api-endpoint
 
-the list and get schema tools are populated by parsing Stripe's OpenAPI spec. the invoke tool leverages Stripe's SDK. instructions.txt is used as a system prompt for grounding the user's LLM to:
+176 APIs are programmatically parsed from top-level APIs in [Stripe's OpenAPI spec](https://raw.githubusercontent.com/stripe/openapi/refs/heads/master/openapi/spec3.json).
+
+* [Included APIs](https://github.com/tomchen-stripe/mcp-server-response-token-sizes/blob/main/apis/included.csv)
+* [Not-included APIs](https://github.com/tomchen-stripe/mcp-server-response-token-sizes/blob/main/apis/not-included.csv)
+* [All APIs](https://github.com/tomchen-stripe/mcp-server-response-token-sizes/blob/main/apis/all.csv)
+
+[instructions.txt](#instructions.txt) is used as a system prompt for grounding the user's LLM to:
 
 - call tools in this sequence: list-api-endpoints, then get-api-endpoint-schema, then invoke-api-endpoint
 - adhering to "deprecated" or best-practice descriptions in the OpenAPI spec
 
-### using with claude code
+### using with claude code (laptop or devbox)
 
 ```bash
 git clone https://github.com/tomchen-stripe/mcp-server-prototype
@@ -25,7 +31,7 @@ claude mcp add --transport stdio mcp-server-prototype -- npx -y npm run start
 claude
 ```
 
-### using with mcp_stripe evals
+### using with mcp_stripe evals (devbox)
 
 - apply this PR as a patch: https://git.corp.stripe.com/stripe-internal/pay-server/pull/1235888
 - on a devbox:
@@ -52,11 +58,12 @@ npm run build
 pay js:run eval --cwd=//lib/mcp_stripe/evals --local
 ```
 
-### further areas of investigation
+### further areas of investigation for this approach
 
-- improving context around foreign key constraints between resources
-- utilizing statistics to inform relevancy and sequence of api calls per user intent
+- will we run into token (context window or response size) limits
+   - [results here](https://github.com/tomchen-stripe/mcp-server-response-token-sizes)
+- running evals on how good newer/sota models are parsing and following complex OpenAPI schemas
+- running evals on how good newer/sota models are at orchestrating the right tools in a world where there are hundreds
+   - if there are workflows that are hard for the LLM to orchestrate, can we just provide a MCP tool that does it?
 - how do we guard more destructive calls with dynamic mcp tools 
-- are there known workflows, e.g. adding a payment method, we can add as higher-order tools
-- how do we unify Blueprints, tutorials, OpenAPI descriptions, to all be on the same page for
-- can we get this to work well with older models like gpt-4.1?
+- can we get this to work well with older models like gpt-4.1 or do we preserve the old experience for older models?
