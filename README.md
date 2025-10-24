@@ -18,8 +18,11 @@ this is a prototype of an mcp server that dynamically populates 176 (out of 572)
 
 ### results
 
-`update the prices of all my products to be 10 dollars more than they are`:
+Manual testing:
+✅ `update the prices of all my products to be 10 dollars more than they are` (5-6 step workflow):
 - [sample output](https://gist.github.com/tomchen-stripe/979642e8ff35a0299e7e675b597bfe48)
+
+[Next steps](#further-areas-of-investigation-for-this-approach) are to run more evals for this approach.
 
 ### using with claude code (laptop or devbox)
 
@@ -66,9 +69,10 @@ pay js:run eval --cwd=//lib/mcp_stripe/evals --local
 ### further areas of investigation for this approach
 
 - will we run into token (context window or response size) limits
-   - [results here](https://github.com/tomchen-stripe/mcp-server-response-token-sizes)
+   - short answer: not for sota 2025+ models, but yes for older 2024- models, [results here](https://github.com/tomchen-stripe/mcp-server-response-token-sizes)
 - running evals on how good newer/sota models are parsing and following complex OpenAPI schemas
-- running evals on how good newer/sota models are at orchestrating the right tools in a world where there are hundreds
+- running evals on how good newer/sota models are at orchestrating the right tools in a world where there are hundred
    - if there are workflows that are hard for the LLM to orchestrate, can we just provide a MCP tool that does it?
+- how do different sota models (gpt family, anthropic family, etc) perform?
 - how do we guard more destructive calls with dynamic mcp tools 
 - can we get this to work well with older models like gpt-4.1 or do we preserve the old experience for older models?
