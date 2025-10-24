@@ -1,5 +1,5 @@
 ### about
-this is a prototype of an mcp server that dynamically populates 176 (out of 572) of Stripe's APIs through three MCP metatools:
+this is a prototype of an mcp server that dynamically populates 176 (out of 572) of Stripe's APIs through [three MCP metatools](https://www.stainless.com/blog/lessons-from-openapi-to-mcp-server-conversion#handling-large-apis-dynamically):
 
 - list-api-endpoints
 - get-api-endpoint-schema
@@ -11,10 +11,15 @@ this is a prototype of an mcp server that dynamically populates 176 (out of 572)
 * [Not-included APIs](https://github.com/tomchen-stripe/mcp-server-response-token-sizes/blob/main/apis/not-included.csv)
 * [All APIs](https://github.com/tomchen-stripe/mcp-server-response-token-sizes/blob/main/apis/all.csv)
 
-[instructions.txt](#instructions.txt) is used as a system prompt for grounding the user's LLM to:
+[instructions.txt](instructions.txt) is used as a system prompt for grounding the user's LLM to:
 
 - call tools in this sequence: list-api-endpoints, then get-api-endpoint-schema, then invoke-api-endpoint
 - adhering to "deprecated" or best-practice descriptions in the OpenAPI spec
+
+### results
+
+`update the prices of all my products to be 10 dollars more than they are`:
+- [sample output](https://gist.github.com/tomchen-stripe/979642e8ff35a0299e7e675b597bfe48)
 
 ### using with claude code (laptop or devbox)
 
