@@ -64,7 +64,7 @@ nodenv local 24.9.0 && nodenv rehash
 pay js install
 npm run build
 
-pay js:run eval --cwd=//lib/mcp_stripe/evals --local
+pay js:run eval --cwd=//lib/mcp_stripe/evals --localhost-mcp
 ```
 
 ### further areas of investigation for this approach
