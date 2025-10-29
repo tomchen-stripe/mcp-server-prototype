@@ -376,7 +376,23 @@ export const createServer = () => {
 
         This executes real API calls against the Stripe account. The results are subject to
         the same authentication, rate limiting, and permissions as direct tool calls.`,
-        inputSchema: zodToJsonSchema(InvokeApiEndpointSchema) as ToolInput,
+        inputSchema: {
+          type: "object",
+          properties: {
+            operationId: {
+              type: "string",
+              description: "The operationId of the API endpoint to invoke",
+            },
+            parameters: {
+              type: "object",
+              description:
+                "Parameters to pass to the endpoint. Structure depends on the specific endpoint - use get-api-endpoint-schema to see required/optional fields.",
+              additionalProperties: true,
+            },
+          },
+          required: ["operationId", "parameters"],
+          additionalProperties: false,
+        } as ToolInput,
       },
     ];
 
@@ -445,6 +461,8 @@ export const createServer = () => {
     Object.keys(requestBodyProps).forEach((key) => {
       exampleParameters[key] = `<provide_${key}_value>`;
     });
+
+    // console.error("[MCP DEBUG] schema:", JSON.stringify(schema, null, 2));
 
     // Add the example invocation to help the LLM understand how to call invoke-api-endpoint
     const schemaWithExample = {
