@@ -112,6 +112,11 @@ export const createServer = () => {
   const spec = JSON.parse(readFileSync(specPath, "utf-8"));
   console.error("[MCP DEBUG] Loaded spec and instructions");
 
+  console.error(
+    `[MCP DEBUG] Instructions loaded: ${instructions.substring(0, 100)}...`
+  );
+  console.error(`[MCP DEBUG] Instructions length: ${instructions.length}`);
+
   const server = new Server(
     {
       name: "mcp-server-prototype",
@@ -259,6 +264,19 @@ export const createServer = () => {
       mainResource = parts[0].toLowerCase() + parts.slice(1).join("");
     }
 
+    // Special case mappings for resources with non-standard casing in OpenAPI spec
+    const resourceMappings: Record<string, string> = {
+      'invoiceitems': 'invoiceItems',
+      'paymentintents': 'paymentIntents',
+      'setupintents': 'setupIntents',
+      'paymentmethods': 'paymentMethods',
+      'customersources': 'customerSources',
+    };
+
+    if (resourceMappings[mainResource]) {
+      mainResource = resourceMappings[mainResource];
+    }
+
     // Check if this is a singleton resource (no 's' at the end) or collection
     const isSingleton =
       !mainResource.endsWith("s") ||
@@ -311,7 +329,18 @@ export const createServer = () => {
       const id = pathParamName ? params[pathParamName] : params.id;
       if (pathParamName) delete params[pathParamName];
       else delete params.id;
-      result = await resource.del(id, params);
+
+      // Special handling for resources that use different delete method names
+      if (mainResource === 'subscriptions') {
+        // Subscriptions use .cancel() instead of .del()
+        result = await resource.cancel(id, params);
+      } else if (typeof resource.del === 'function') {
+        result = await resource.del(id, params);
+      } else if (typeof resource.delete === 'function') {
+        result = await resource.delete(id, params);
+      } else {
+        throw new Error(`Delete method not found on resource: ${mainResource}`);
+      }
     } else if (foundMethod === "patch" || foundMethod === "put") {
       const id = pathParamName ? params[pathParamName] : params.id;
       if (pathParamName) delete params[pathParamName];
@@ -321,28 +350,6 @@ export const createServer = () => {
 
     return result;
   }
-
-  // Log client info during initialization
-  server.setRequestHandler(InitializeRequestSchema, async (request) => {
-    console.error("[MCP DEBUG] Initialize request received");
-    console.error("[MCP DEBUG] Client Info:", JSON.stringify(request.params.clientInfo, null, 2));
-
-    // Return the default initialization response
-    // The SDK will handle the actual initialization logic
-    return {
-      protocolVersion: "2024-11-05",
-      capabilities: {
-        prompts: {},
-        resources: { subscribe: true },
-        tools: {},
-        logging: {},
-      },
-      serverInfo: {
-        name: "mcp-server-prototype",
-        version: "0.0.1",
-      },
-    };
-  });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     console.error("[MCP DEBUG] ListTools request received");
