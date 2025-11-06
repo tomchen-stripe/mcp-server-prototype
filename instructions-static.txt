@@ -1,0 +1,307 @@
+This is the Stripe MCP server providing direct access to Stripe's REST API v2025-09-30.clover.
+
+**CRITICAL RULES - NEVER SKIP THESE**:
+1. All Stripe API operations MUST be performed through the provided MCP tools
+2. Do NOT use curl, HTTP requests, or any other direct API access methods
+3. ALWAYS call `get-api-endpoint-schema` BEFORE calling `invoke-api-endpoint`
+4. ALWAYS follow the best practices specified in the operation's description field
+
+## Tool Discovery Workflow
+
+**MANDATORY WORKFLOW** - You MUST follow ALL steps in order:
+
+### Step 1: Discover Available Operations (Optional - Skip if you know the operationId)
+Call `list-api-endpoints` to get a list of all available operationIds (e.g., PostCustomers, GetCharges, DeleteCustomersCustomer)
+
+### Step 2: Get Operation Schema (REQUIRED - NEVER SKIP)
+**CRITICAL**: You MUST call `get-api-endpoint-schema` with the operationId BEFORE calling `invoke-api-endpoint`. This is REQUIRED because:
+- It provides the complete parameter schema (required vs optional parameters)
+- It includes the operation description with best practices and important warnings
+- It shows the correct request body structure
+- It prevents you from making API calls with incorrect parameters
+
+**DO NOT SKIP THIS STEP** even if you think you know the parameters. The schema contains critical information about:
+- Required and optional parameters
+- Request body schema
+- Response schema
+- Operation description with best practices
+- Deprecated operations to avoid
+- Correct resource creation order
+
+### Step 3: Read and Follow Best Practices (REQUIRED)
+After getting the schema, you MUST:
+- Read the operation description field carefully
+- Follow any best practices mentioned in the description
+- Avoid deprecated operations (e.g., PostCharges)
+- Follow the correct resource creation order
+- Use the recommended approach for the task
+
+### Step 4: Invoke the Operation
+Call `invoke-api-endpoint` with the operationId and parameters based on the schema you just retrieved.
+
+**CRITICAL - PARAMETER EXTRACTION STEPS**:
+You MUST follow these exact steps to construct the parameters:
+
+1. Look at the schema response's `requestBody.content['application/x-www-form-urlencoded'].schema`
+2. Identify ALL `.properties` names (e.g., "name", "description", "email") and `.required` or nested required fields
+3. Look at the schema response's `example_invocation.parameters` - this shows you the EXACT structure
+4. Map values from the user's request to these parameter names
+5. Create a parameters object with those keys and the user's values
+6. Pass this object in the "parameters" field of invoke-api-endpoint
+
+**YOU MUST NOT**:
+- ❌ Pass an empty parameters object {}
+- ❌ Skip extracting parameters from the schema
+- ❌ Guess at parameter names without checking the schema
+- ❌ Put parameters in the wrong format
+
+**STEP-BY-STEP REASONING TEMPLATE**:
+When you get the schema response, think through:
+1. "What parameters does this operation accept?" → Look at requestBody properties
+2. "What values did the user provide?" → Parse the user's request
+3. "How do I map user values to parameter names?" → Match semantically
+4. "What is my parameters object?" → Construct {param_name: user_value}
+5. "Is my parameters object correct?" → Verify it matches example_invocation structure
+
+**Complete Example Workflow:**
+```
+User Request: "Create a customer with email test@example.com"
+
+Step 1 (Optional): list-api-endpoints
+  Returns: [..., "PostCustomers", "GetCustomers", ...]
+
+Step 2 (REQUIRED): get-api-endpoint-schema {"operationId": "PostCustomers"}
+  Returns: {
+    "operationId": "PostCustomers",
+    "description": "Creates a new customer object...",
+    "parameters": [...],
+    "requestBody": {
+      "content": {
+        "application/x-www-form-urlencoded": {
+          "schema": {
+            "properties": {
+              "email": {"type": "string"},
+              "name": {"type": "string"},
+              ...
+            }
+          }
+        }
+      }
+    }
+  }
+  → READ the description for best practices
+  → NOTE the required vs optional parameters from requestBody.schema.properties
+  → EXTRACT parameter names like "email", "name" from the properties object
+
+Step 3 (REQUIRED): Follow best practices from description
+
+Step 4: invoke-api-endpoint {
+    "operationId": "PostCustomers",
+    "parameters": {"email": "test@example.com"}
+  }
+  → The "parameters" object contains the actual values for the parameter names found in the schema
+  Returns: Created customer object
+```
+
+**Another Example - Creating a Product:**
+```
+User Request: "Create a product called 'Test Product' with description 'A test product'"
+
+Step 1: get-api-endpoint-schema {"operationId": "PostProducts"}
+  Returns schema with requestBody containing properties: {name, description, ...}
+
+Step 2: Extract parameter names from schema: "name" and "description" are available
+
+Step 3: invoke-api-endpoint {
+    "operationId": "PostProducts",
+    "parameters": {
+      "name": "Test Product",
+      "description": "A test product"
+    }
+  }
+  → Notice how the parameter names ("name", "description") match the schema properties
+  → Notice how the parameter values match what the user requested
+```
+
+**Example of Following Best Practices:**
+```
+User Request: "Create a payment"
+
+Step 1: get-api-endpoint-schema {"operationId": "PostCharges"}
+  Returns: Description says "DEPRECATED - Use PostPaymentIntents instead"
+
+Step 2: Follow best practice → Use PostPaymentIntents instead
+
+Step 3: get-api-endpoint-schema {"operationId": "PostPaymentIntents"}
+  Returns: Full schema for PaymentIntents
+
+Step 4: invoke-api-endpoint with PostPaymentIntents
+```
+
+## Tool Naming Convention
+All tools are named by their OpenAPI operationId following the pattern: {HttpMethod}{ResourceName}
+- Get* operations: Retrieve or list resources (e.g., GetCharges, GetCustomers, GetBalance)
+- Post* operations: Create new resources (e.g., PostCustomers, PostPaymentIntents, PostRefunds)
+- Delete* operations: Delete resources (requires resource ID)
+- Patch*/Put* operations: Update existing resources (requires resource ID)
+
+## Authentication
+All API calls require a valid STRIPE_API_KEY environment variable. Ensure this is set before making any requests.
+
+## Key API Patterns & Best Practices
+
+**CRITICAL**: The operation's description field in the schema is the authoritative source of best practices. ALWAYS read and follow it.
+
+### Payment Processing
+**MANDATORY RULE**: Always use PaymentIntents API for payment processing, NEVER use direct Charges:
+
+**CORRECT APPROACH**:
+1. Create customer (optional but recommended): `PostCustomers`
+2. Create payment intent: `PostPaymentIntents` with amount and currency
+3. Confirm payment: Use `PostPaymentIntentsIntent` to confirm
+
+**DEPRECATED - DO NOT USE**:
+- ❌ PostCharges - DEPRECATED and will fail for many payment methods
+- ❌ Creating PaymentMethods directly without PaymentIntent
+
+**WHY**: PaymentIntents is the modern, recommended API that:
+- Supports 3D Secure and Strong Customer Authentication (SCA)
+- Handles complex payment flows automatically
+- Works with all payment methods
+- Provides better error handling
+
+**Additional Payment Operations**:
+- PostSetupIntents: Save payment method for future use without charging
+- PostPaymentMethods: Only create when attaching to SetupIntent or PaymentIntent
+- PostRefunds: Issue refund for a completed payment
+
+### Customer Management
+**BEST PRACTICE**: Create customers before creating payments for better tracking
+- PostCustomers: Create a new customer with email and metadata
+- GetCustomers: List all customers (supports filtering with email, created, limit)
+- PostCustomersCustomer: Update customer details
+- PostCustomerSessions: Create customer portal session for self-service
+
+### Subscriptions
+**REQUIRED ORDER**: Product → Price → Subscription
+1. PostProducts: Create a product first
+2. PostPrices: Create a price for that product
+3. PostSubscriptions: Create subscription using the price ID
+
+**Additional Operations**:
+- PostSubscriptionSchedules: Schedule future subscription changes
+- PostSubscriptionItems: Add items to existing subscription
+- PostSubscriptionsSubscriptionExposed: Update or cancel subscription
+
+### Invoicing
+**REQUIRED ORDER**: Customer → InvoiceItem → Invoice → Finalize
+1. PostCustomers: Create customer (if not exists)
+2. PostInvoiceitems: Add line items to invoice
+3. PostInvoices: Create draft invoice
+4. PostInvoicesInvoiceFinalize: Finalize to make it payable
+
+### Products & Pricing
+- PostProducts: Create a product (physical good or service)
+- PostPrices: Create a price for a product (one-time or recurring)
+- PostCoupons: Create discount coupons (percent_off or amount_off)
+- PostPromotionCodes: Create promotion codes that reference coupons
+
+## Tool Selection Guidelines
+
+**RULE 1: Always Get Schema First**
+Before calling ANY operation, you MUST call `get-api-endpoint-schema` to:
+- Verify the operation exists and is not deprecated
+- Understand required vs optional parameters
+- Read the description for best practices and warnings
+- See examples of correct usage
+
+**RULE 2: Read Operation Descriptions**
+The description field contains critical information:
+- Whether an operation is deprecated
+- Which operation to use instead
+- Best practices specific to that operation
+- Common pitfalls to avoid
+- Required parameter combinations
+
+**RULE 3: List vs Retrieve**
+- Get{Resource}s (plural): Lists multiple resources, supports pagination and filtering
+- Get{Resource}sResource (singular): Retrieves a single specific resource (requires ID parameter)
+
+**RULE 4: Follow Resource Creation Order**
+Many Stripe resources depend on others. Always create in the correct order:
+- Payments: Customer (optional) → PaymentIntent → Confirm
+- Subscriptions: Customer → Product → Price → Subscription
+- Invoices: Customer → InvoiceItem → Invoice → Finalize
+
+**RULE 5: Common Mistakes to AVOID**
+- ❌ Using PostCharges instead of PostPaymentIntents
+- ❌ Skipping `get-api-endpoint-schema` before calling operations
+- ❌ Ignoring deprecation warnings in descriptions
+- ❌ Creating PaymentMethods directly for immediate payments
+- ❌ Not finalizing invoices after creating invoice items
+- ❌ Not following the correct resource creation order
+
+**RULE 6: Pagination**
+List operations support pagination parameters:
+- `limit`: Number of objects to return (default 10, max 100)
+- `starting_after`: Cursor for pagination (ID of last object from previous page)
+
+**RULE 7: Idempotency**
+Create operations support `idempotency_key` parameter to safely retry requests without duplicating resources.
+
+## Resource Categories
+
+**Core Resources**: Customers, Accounts, Balance, BalanceTransactions
+**Payment Resources**: PaymentIntents, PaymentMethods, SetupIntents, Sources, Tokens
+**Billing Resources**: Invoices, InvoiceItems, Subscriptions, Plans, Prices, Products
+**Connect Resources**: Accounts, AccountLinks, AccountSessions, ApplicationFees
+**Additional**: Refunds, Disputes, Events, Files, WebhookEndpoints
+
+## Summary: Required Workflow for EVERY Operation
+
+**YOU MUST FOLLOW THIS WORKFLOW FOR EVERY STRIPE OPERATION:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User makes request                                       │
+└─────────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Call get-api-endpoint-schema with operationId           │
+│    (REQUIRED - NEVER SKIP)                                  │
+└─────────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 3. READ the description field                               │
+│    - Check if deprecated                                    │
+│    - Note best practices                                    │
+│    - Understand required parameters                         │
+└─────────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 4. FOLLOW best practices from description                   │
+│    - Use recommended operations                             │
+│    - Follow correct resource order                          │
+│    - Avoid deprecated operations                            │
+└─────────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Call invoke-api-endpoint with correct parameters        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**NEVER:**
+- ❌ Call `invoke-api-endpoint` without first calling `get-api-endpoint-schema`
+- ❌ Skip reading the operation description
+- ❌ Ignore deprecation warnings or best practices
+- ❌ Use PostCharges for payments (use PostPaymentIntents)
+- ❌ Guess at parameters or operation names
+
+**ALWAYS:**
+- ✅ Call `get-api-endpoint-schema` before `invoke-api-endpoint`
+- ✅ Read and follow the description field guidance
+- ✅ Use the recommended operations for each task
+- ✅ Follow the correct resource creation order
+- ✅ Verify operation exists and is not deprecated
+
+Remember: The operation's description field in the schema is the authoritative source of truth. ALWAYS consult it before making any API call.

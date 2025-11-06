@@ -12,7 +12,7 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsc && shx mkdir -p dist/data && shx cp data/spec3.clean.json dist/data/ && shx cp instructions.txt dist/ && shx chmod +x dist/*.js",
+        "build": "tsc && shx mkdir -p dist/data && shx cp data/spec3.clean.json dist/data/ && shx cp instructions-*.txt dist/ && shx cp -r mock_sandbox/code_tools dist/mock_sandbox && shx chmod +x dist/*.js && shx cp dist/mock_sandbox/code_tools/*.js mock_sandbox/code_tools",
         "watch": "tsc --watch",
         "start": "node dist/index.js 2> error.log"
     },

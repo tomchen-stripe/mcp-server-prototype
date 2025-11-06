@@ -2,3 +2,6 @@ error.log
 dist/
 node_modules/
 .env
+mock_sandbox/*.ts
+mock_sandbox/*.js
+mock_sandbox/code_tools

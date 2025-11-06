@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build: .
+    network_mode: "host"  # Shares localhost network
+    env_file:
+      - .env  # Loads STRIPE_API_KEY from your .env file
+    volumes:
+      # Optional: mount mock_sandbox if you want to persist data
+      - ./mock_sandbox:/app/mock_sandbox
+    restart: unless-stopped

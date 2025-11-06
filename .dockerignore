@@ -1,0 +1,27 @@
+# Node modules (will be installed in container)
+node_modules
+npm-debug.log
+
+# Environment files (should be mounted or passed as env vars)
+.env
+.env.local
+
+# Git
+.git
+.gitignore
+
+# IDE and system files
+.vscode
+.idea
+.DS_Store
+.claude
+
+# Build outputs (will be generated in container)
+dist
+
+# Logs
+*.log
+error.log
+
+# Development files
+README.md

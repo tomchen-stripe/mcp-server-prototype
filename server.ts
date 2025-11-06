@@ -35,15 +35,21 @@ import Stripe from "stripe";
 import dotenv from "dotenv";
 import { HttpsProxyAgent } from "https-proxy-agent";
 
-const args = process.argv.slice(2);
-const discoveryMode = args[0] || 'dynamic';
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-// Load environment variables from .env file
-dotenv.config();
+const args = process.argv.slice(2);
+const discoveryMode = args[1] || 'code';
+
+// Load environment variables from .env file in the project root
+// When built, __dirname is dist/, so go up one level to find .env
+dotenv.config({ path: join(__dirname, "..", ".env") });
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
+// Dynamic mode schemas
 const GetApiEndpointSchemaSchema = z.object({
   operationId: z
     .string()
@@ -62,6 +68,25 @@ const InvokeApiEndpointSchema = z.object({
     .describe(
       "Parameters to pass to the endpoint. Structure depends on the specific endpoint - use get-api-endpoint-schema to see required/optional fields."
     ),
+});
+
+// Code mode schemas
+const GetCodeFileInterfaceSchema = z.object({
+  operationId: z
+    .string()
+    .describe(
+      "The operationId to get the interface for (e.g., 'PostCustomers', 'GetCharges')"
+    ),
+});
+
+const GenerateCodeCallSchema = z.object({
+  code: z
+    .string()
+    .describe("The TypeScript code to write and execute"),
+  filename: z
+    .string()
+    .optional()
+    .describe("Optional filename (without extension). If not provided, a timestamp will be used."),
 });
 
 // Helper function to convert OpenAPI schema to a simple JSON schema for MCP
@@ -106,10 +131,11 @@ function extractInputSchema(operation: any): any {
 
 export const createServer = () => {
   console.error("[MCP DEBUG] createServer called");
+
   // Load instructions and spec
-  const instructionsPath = join(process.cwd(), "instructions.txt");
+  const instructionsPath = join(__dirname, `instructions-${discoveryMode}.txt`);
   const instructions = readFileSync(instructionsPath, "utf-8");
-  const specPath = join(process.cwd(), "data", "spec3.clean.json");
+  const specPath = join(__dirname, "data", "spec3.clean.json");
   const spec = JSON.parse(readFileSync(specPath, "utf-8"));
   console.error("[MCP DEBUG] Loaded spec and instructions");
 
@@ -357,59 +383,99 @@ export const createServer = () => {
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     console.error("[MCP DEBUG] ListTools request received");
-    const tools: Tool[] = [
-      {
-        name: "get-api-endpoint-schema",
-        description: `Get detailed schema and documentation for one or more API endpoints.
-
-        Use this after discovering endpoints with list-api-endpoints to understand required/optional
-        parameters before calling invoke-api-endpoint.
-
-        Returns full parameter schemas, response schemas, example requests, and documentation URLs.`,
-        inputSchema: zodToJsonSchema(GetApiEndpointSchemaSchema) as ToolInput,
-      },
-      {
-        name: "invoke-api-endpoint",
-        description: `Invoke a Stripe API endpoint with provided parameters.
-
-        Use get-api-endpoint-schema first to understand required parameters.
-
-        This executes real API calls against the Stripe account. The results are subject to
-        the same authentication, rate limiting, and permissions as direct tool calls.`,
-        inputSchema: {
-          type: "object",
-          properties: {
-            operationId: {
-              type: "string",
-              description: "The operationId of the API endpoint to invoke",
-            },
-            parameters: {
-              type: "object",
-              description:
-                "Parameters to pass to the endpoint. Structure depends on the specific endpoint - use get-api-endpoint-schema to see required/optional fields.",
-              additionalProperties: true,
-            },
-          },
-          required: ["operationId", "parameters"],
-          additionalProperties: false,
-        } as ToolInput,
-      },
-    ];
+    const tools: Tool[] = [];
 
     if (discoveryMode === 'dynamic') {
-      tools.push({
-        name: "list-api-endpoints",
-        description: `Search available Stripe API endpoints. Returns matching endpoints with brief descriptions.
+      // Dynamic mode: 3 tools for runtime API calls
+      tools.push(
+        {
+          name: "list-api-endpoints",
+          description: `Search available Stripe API endpoints. Returns matching endpoints with brief descriptions.
 
         Common categories: payments, customers, subscriptions, invoices, refunds, disputes, payouts,
         billing, checkout, terminal, identity, radar, documentation, search, launchpad.
 
         Use this tool to discover which endpoints are available before calling get-api-endpoint-schema
         to learn more about specific endpoints.`,
-        inputSchema: zodToJsonSchema(z.object({})) as ToolInput,
-      });
-    } else { 
-      // discoveryMode is static
+          inputSchema: zodToJsonSchema(z.object({})) as ToolInput,
+        },
+        {
+          name: "get-api-endpoint-schema",
+          description: `Get detailed schema and documentation for one or more API endpoints.
+
+        Use this after discovering endpoints with list-api-endpoints to understand required/optional
+        parameters before calling invoke-api-endpoint.
+
+        Returns full parameter schemas, response schemas, example requests, and documentation URLs.`,
+          inputSchema: zodToJsonSchema(GetApiEndpointSchemaSchema) as ToolInput,
+        },
+        {
+          name: "invoke-api-endpoint",
+          description: `Invoke a Stripe API endpoint with provided parameters.
+
+        Use get-api-endpoint-schema first to understand required parameters.
+
+        This executes real API calls against the Stripe account. The results are subject to
+        the same authentication, rate limiting, and permissions as direct tool calls.`,
+          inputSchema: {
+            type: "object",
+            properties: {
+              operationId: {
+                type: "string",
+                description: "The operationId of the API endpoint to invoke",
+              },
+              parameters: {
+                type: "object",
+                description:
+                  "Parameters to pass to the endpoint. Structure depends on the specific endpoint - use get-api-endpoint-schema to see required/optional fields.",
+                additionalProperties: true,
+              },
+            },
+            required: ["operationId", "parameters"],
+            additionalProperties: false,
+          } as ToolInput,
+        }
+      );
+    } else if (discoveryMode === 'code') {
+      // Code mode: 3 tools for code generation
+      tools.push(
+        {
+          name: "list-code-files",
+          description: `List all available code wrapper files for Stripe API operations.
+
+        Each file contains a self-contained TypeScript function that wraps a Stripe SDK call
+        with inline type definitions extracted from the OpenAPI spec.
+
+        Use this to discover which operations have code wrappers available.`,
+          inputSchema: zodToJsonSchema(z.object({})) as ToolInput,
+        },
+        {
+          name: "get-code-file-interface",
+          description: `Get the TypeScript interface definition for a specific operation's code file.
+
+        Returns the complete interface with all parameter types and JSDoc documentation,
+        allowing you to understand what parameters are needed for the operation.
+
+        Use this after list-code-files to see the exact type signature before generating code.`,
+          inputSchema: zodToJsonSchema(GetCodeFileInterfaceSchema) as ToolInput,
+        },
+        {
+          name: "execute-code",
+          description: `Execute TypeScript code by writing it to mock_sandbox and running it.
+
+        This tool will:
+        1. Write the provided TypeScript code to a file in mock_sandbox/
+        2. Execute the code using ts-node
+        3. Return the execution results (stdout, stderr, or errors)
+
+        The code should use imports from ./code_tools/ and handle its own Stripe client setup.
+
+        Use this to test actual API calls with the generated wrapper functions.`,
+          inputSchema: zodToJsonSchema(GenerateCodeCallSchema) as ToolInput,
+        }
+      );
+    } else {
+      // Static mode: one tool per operation
       const operations = listAllOperations();
       for (const operation of operations) {
         tools.push({
@@ -420,7 +486,7 @@ export const createServer = () => {
       }
     }
 
-    console.error(`[MCP DEBUG] Returning ${tools.length} tools`);
+    console.error(`[MCP DEBUG] Returning ${tools.length} tools in ${discoveryMode} mode`);
     return { tools };
   });
 
@@ -557,6 +623,146 @@ export const createServer = () => {
     }
   }
 
+  // Helper to handle the list-code-files tool
+  function handleListCodeFilesTool() {
+    console.error("[MCP DEBUG] handleListCodeFilesTool called");
+    const operations = listAllOperations();
+    console.error(`[MCP DEBUG] Found ${operations.length} code files`);
+
+    const sortedOperations = operations.sort((a, b) => a.operationId.localeCompare(b.operationId));
+    const formattedList = sortedOperations
+      .map(op => `${op.operationId}.ts: ${op.description}`)
+      .join("\n");
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Available code wrapper files (${operations.length} total):\n\n${formattedList}`,
+          description: `Each file is a self-contained TypeScript wrapper. Use get-code-file-interface to see the interface for a specific operation.`,
+        },
+      ],
+    };
+  }
+
+  // Helper to handle the get-code-file-interface tool
+  function handleGetCodeFileInterfaceTool(args: any) {
+    console.error("[MCP DEBUG] handleGetCodeFileInterfaceTool called with:", args);
+    let operationIdFilename = args?.operationId;
+
+    if (!operationIdFilename) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: 'Error: operationId parameter is required. Example: {"operationId": "PostCustomers"}',
+          },
+        ],
+      };
+    }
+
+    // Ensure .ts extension is present
+    if (!operationIdFilename.endsWith('.ts')) {
+      operationIdFilename = `${operationIdFilename}.ts`;
+    }
+
+    // Read the code file
+    const codeFilePath = join(__dirname, "mock_sandbox", "code_tools", operationIdFilename);
+    try {
+      const codeContent = readFileSync(codeFilePath, "utf-8");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: codeContent,
+            description: `Interface and signature for ${operationIdFilename}. Use execute-code to generate usage code.`,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: Code file not found for operation "${operationIdFilename}". Use list-code-files to see available operations.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Helper to handle the execute-code tool
+  async function handleExecuteCodeTool(args: any) {
+    console.error("[MCP DEBUG] handleGenerateCodeCallTool called with:", args);
+    const code = args?.code;
+    const filename = args?.filename;
+
+    if (!code) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: 'Error: code parameter is required. Provide the TypeScript code to execute.\n\nExample:\n{"code": "import { PostCustomers } from \'./code_tools/PostCustomers.js\';\n..."}',
+          },
+        ],
+      };
+    }
+
+    // Create mock_sandbox directory in project root (not dist/)
+    const projectRoot = join(__dirname, "..");
+    const sandboxDir = join(projectRoot, "mock_sandbox");
+    const { mkdirSync, writeFileSync, existsSync } = await import("fs");
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const execAsync = promisify(exec);
+
+    if (!existsSync(sandboxDir)) {
+      mkdirSync(sandboxDir, { recursive: true });
+    }
+
+    // Determine the filename
+    const timestamp = Date.now();
+    const fileName = filename ? `${filename}.ts` : `execution_${timestamp}.ts`;
+    const filePath = join(sandboxDir, fileName);
+
+    // Write the code to a file
+    writeFileSync(filePath, code, "utf-8");
+    console.error(`[MCP DEBUG] Code written to: ${filePath}`);
+
+    // Execute the code from project root so relative imports work
+    try {
+      console.error(`[MCP DEBUG] Executing: npx ts-node ${filePath}`);
+      const { stdout, stderr } = await execAsync(`npx ts-node "${filePath}"`, {
+        cwd: projectRoot,
+        timeout: 30000, // 30 second timeout
+      });
+
+      console.error(`[MCP DEBUG] Execution completed successfully`);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Code written to: ${fileName}\n\nExecution Result:\n${stdout}${stderr ? `\n\nWarnings/Info:\n${stderr}` : ""}`,
+            description: `Successfully executed the provided code.`,
+          },
+        ],
+      };
+    } catch (error: any) {
+      console.error(`[MCP DEBUG] Execution failed:`, error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Code written to: ${fileName}\n\nExecution Error:\n${error.message}\n\nStdout:\n${error.stdout || "(none)"}\n\nStderr:\n${error.stderr || "(none)"}`,
+            description: `Error executing the provided code. The code was saved but execution failed.`,
+          },
+        ],
+      };
+    }
+  }
+
   // Helper to handle fallback tool invocation (operationId as tool name)
   async function handleFallbackToolInvocation(name: string, args: any) {
     try {
@@ -593,6 +799,7 @@ export const createServer = () => {
 
     let result;
     switch (name) {
+      // Dynamic mode tools
       case "list-api-endpoints":
         result = handleDynamicListApiEndpointTool();
         break;
@@ -602,6 +809,19 @@ export const createServer = () => {
       case "invoke-api-endpoint":
         result = await handleInvokeApiEndpointTool(args);
         break;
+
+      // Code mode tools
+      case "list-code-files":
+        result = handleListCodeFilesTool();
+        break;
+      case "get-code-file-interface":
+        result = handleGetCodeFileInterfaceTool(args);
+        break;
+      case "execute-code":
+        result = await handleExecuteCodeTool(args);
+        break;
+
+      // Fallback for static mode (operationId as tool name)
       default:
         result = await handleFallbackToolInvocation(name, args);
         break;

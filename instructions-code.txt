@@ -1,0 +1,298 @@
+This is the Stripe MCP server providing code generation and execution for Stripe's REST API v2025-09-30.clover.
+
+**CRITICAL RULES - NEVER SKIP THESE**:
+1. All Stripe API operations MUST be performed through the provided code wrapper functions
+2. Do NOT use curl, HTTP requests, or any other direct API access methods
+3. ALWAYS call `get-code-file-interface` BEFORE writing code to understand the interface
+4. ALWAYS write complete, executable TypeScript code that includes proper imports and error handling
+5. Use the `execute-code` tool to run the generated code and get real API results
+
+## Code Mode Workflow
+
+**MANDATORY WORKFLOW** - You MUST follow ALL steps in order:
+
+### Step 1: Discover Available Operations (Optional - Skip if you know the operationId)
+Call `list-code-files` to get a list of all available operationIds (e.g., PostCustomers, GetCharges, DeleteCustomersCustomer)
+- Each operation has a self-contained TypeScript wrapper file
+- Files include inline type definitions extracted from the OpenAPI spec
+
+### Step 2: Get Operation Interface (REQUIRED - NEVER SKIP)
+**CRITICAL**: You MUST call `get-code-file-interface` with the operationId BEFORE writing code. This is REQUIRED because:
+- It shows the complete TypeScript interface with all parameters
+- It includes JSDoc documentation for each parameter
+- It shows the function signature
+- It prevents you from writing code with incorrect parameters
+
+**DO NOT SKIP THIS STEP** even if you think you know the parameters. The interface contains critical information about:
+- Required and optional parameters with their types
+- Parameter descriptions and constraints
+- Proper TypeScript types for type safety
+
+### Step 3: Write TypeScript Code
+Write complete, executable TypeScript code that:
+- Imports the operation function from `./code_tools/{OperationId}.js`
+- Imports and configures Stripe client with dotenv
+- Creates properly typed parameters based on the interface
+- Includes proper error handling
+- Outputs results in a readable format (JSON.stringify with formatting)
+
+**CODE TEMPLATE**:
+```typescript
+import { {OperationId} } from "./code_tools/{OperationId}.js";
+import Stripe from "stripe";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const stripe = new Stripe(process.env.STRIPE_API_KEY || "");
+
+async function run() {
+  try {
+    const result = await {OperationId}(stripe, {
+      // Parameters based on the interface
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return result;
+  } catch (error: any) {
+    console.error("Error:", error.message);
+    throw error;
+  }
+}
+
+run().catch(console.error);
+```
+
+### Step 4: Execute the Code
+Call `execute-code` with:
+- `code`: The complete TypeScript code you wrote
+- `filename` (optional): A descriptive filename like "create_customer"
+
+The tool will:
+1. Write the code to `mock_sandbox/{filename}.ts`
+2. Execute it using ts-node
+3. Return the execution results (API response or errors)
+
+**Complete Example Workflow:**
+```
+User Request: "Create a customer with email test@example.com and name Test User"
+
+Step 1 (Optional): list-code-files
+  Returns: [..., "PostCustomers", "GetCustomers", ...]
+
+Step 2 (REQUIRED): get-code-file-interface {"operationId": "PostCustomers"}
+  Returns:
+    interface PostCustomersParams {
+      /** Customer's email address */
+      email?: string;
+      /** The customer's full name or business name */
+      name?: string;
+      ...
+    }
+
+    export async function PostCustomers(
+      stripe: Stripe,
+      params: PostCustomersParams
+    ): Promise<any>;
+
+Step 3: Write code based on the interface
+
+Step 4: execute-code {
+    "code": "import { PostCustomers } from \"./code_tools/PostCustomers.js\";\nimport Stripe from \"stripe\";\nimport dotenv from \"dotenv\";\n\ndotenv.config();\n\nconst stripe = new Stripe(process.env.STRIPE_API_KEY || \"\");\n\nasync function run() {\n  try {\n    const result = await PostCustomers(stripe, {\n      email: \"test@example.com\",\n      name: \"Test User\"\n    });\n    console.log(JSON.stringify(result, null, 2));\n    return result;\n  } catch (error: any) {\n    console.error(\"Error:\", error.message);\n    throw error;\n  }\n}\n\nrun().catch(console.error);",
+    "filename": "create_customer"
+  }
+
+  Returns:
+    Code written to: create_customer.ts
+
+    Execution Result:
+    {
+      "id": "cus_xxx",
+      "email": "test@example.com",
+      "name": "Test User",
+      ...
+    }
+```
+
+**Another Example - Creating a PaymentIntent:**
+```
+User Request: "Create a payment intent for $10 USD"
+
+Step 1: get-code-file-interface {"operationId": "PostPaymentIntents"}
+  Returns interface showing required fields: amount (number), currency (string)
+
+Step 2: Write and execute code:
+  execute-code {
+    "code": "import { PostPaymentIntents } from \"./code_tools/PostPaymentIntents.js\";\nimport Stripe from \"stripe\";\nimport dotenv from \"dotenv\";\n\ndotenv.config();\n\nconst stripe = new Stripe(process.env.STRIPE_API_KEY || \"\");\n\nasync function run() {\n  const result = await PostPaymentIntents(stripe, {\n    amount: 1000,  // $10.00 in cents\n    currency: \"usd\"\n  });\n  console.log(JSON.stringify(result, null, 2));\n}\n\nrun().catch(console.error);",
+    "filename": "create_payment_intent"
+  }
+```
+
+## Tool Naming Convention
+All wrapper functions are named by their OpenAPI operationId following the pattern: {HttpMethod}{ResourceName}
+- Get* operations: Retrieve or list resources (e.g., GetCharges, GetCustomers, GetBalance)
+- Post* operations: Create new resources (e.g., PostCustomers, PostPaymentIntents, PostRefunds)
+- Delete* operations: Delete resources (requires resource ID)
+
+## Authentication
+All API calls require a valid STRIPE_API_KEY environment variable. The generated code uses dotenv to load this from your .env file.
+
+## Code Generation Best Practices
+
+**RULE 1: Always Get Interface First**
+Before writing ANY code, you MUST call `get-code-file-interface` to:
+- See the exact parameter types
+- Understand which parameters are required vs optional
+- Read JSDoc descriptions for each parameter
+- Ensure type safety in your code
+
+**RULE 2: Write Complete, Executable Code**
+Your code must:
+- Include all necessary imports
+- Configure the Stripe client properly
+- Handle errors gracefully
+- Output results in a readable format
+- Be self-contained and ready to execute
+
+**RULE 3: Use Proper TypeScript Types**
+- Match parameter types from the interface exactly
+- Use number for amounts (in cents)
+- Use string for IDs and enum values
+- Use Record<string, any> for complex nested objects
+
+**RULE 4: Follow Stripe Best Practices**
+- Use PaymentIntents API, not Charges (deprecated)
+- Create customers before payments for better tracking
+- Follow correct resource creation order:
+  - Subscriptions: Product � Price � Subscription
+  - Invoices: Customer � InvoiceItem � Invoice � Finalize
+  - Payments: Customer (optional) � PaymentIntent � Confirm
+
+**RULE 5: Handle Execution Results**
+When `execute-code` returns:
+- Success: The stdout contains the API response JSON
+- Failure: The stderr/error contains debugging information
+- The code file persists in mock_sandbox for debugging
+
+**RULE 6: Iterate on Failures**
+If execution fails:
+- Read the error message carefully
+- Check the interface again for correct parameter types
+- Verify required parameters are included
+- Fix the code and execute again
+
+## Common Code Patterns
+
+**Creating a Customer:**
+```typescript
+import { PostCustomers } from "./code_tools/PostCustomers.js";
+import Stripe from "stripe";
+import dotenv from "dotenv";
+
+dotenv.config();
+const stripe = new Stripe(process.env.STRIPE_API_KEY || "");
+
+async function run() {
+  const customer = await PostCustomers(stripe, {
+    email: "customer@example.com",
+    name: "Customer Name",
+    metadata: { user_id: "123" }
+  });
+  console.log(JSON.stringify(customer, null, 2));
+}
+
+run().catch(console.error);
+```
+
+**Listing Resources with Pagination:**
+```typescript
+import { GetCustomers } from "./code_tools/GetCustomers.js";
+import Stripe from "stripe";
+import dotenv from "dotenv";
+
+dotenv.config();
+const stripe = new Stripe(process.env.STRIPE_API_KEY || "");
+
+async function run() {
+  const customers = await GetCustomers(stripe, {
+    limit: 10,
+    email: "test@example.com"  // Optional filter
+  });
+  console.log(JSON.stringify(customers, null, 2));
+}
+
+run().catch(console.error);
+```
+
+**Creating a PaymentIntent:**
+```typescript
+import { PostPaymentIntents } from "./code_tools/PostPaymentIntents.js";
+import Stripe from "stripe";
+import dotenv from "dotenv";
+
+dotenv.config();
+const stripe = new Stripe(process.env.STRIPE_API_KEY || "");
+
+async function run() {
+  const paymentIntent = await PostPaymentIntents(stripe, {
+    amount: 2000,  // $20.00 in cents
+    currency: "usd",
+    automatic_payment_methods: {
+      enabled: true
+    }
+  });
+  console.log(JSON.stringify(paymentIntent, null, 2));
+}
+
+run().catch(console.error);
+```
+
+## Summary: Required Workflow for EVERY Operation
+
+**YOU MUST FOLLOW THIS WORKFLOW FOR EVERY STRIPE OPERATION:**
+
+```
+                                                             
+ 1. User makes request                                       
+                                                             
+                        �
+                                                             
+ 2. Call get-code-file-interface with operationId           
+    (REQUIRED - NEVER SKIP)                                  
+                                                             
+                        �
+                                                             
+ 3. READ the interface definition                            
+    - Note required vs optional parameters                   
+    - Check parameter types                                  
+    - Read JSDoc descriptions                                
+                                                             
+                        �
+                                                             
+ 4. WRITE complete TypeScript code                           
+    - Import wrapper function                                
+    - Configure Stripe client                                
+    - Pass typed parameters                                  
+    - Handle errors                                          
+                                                             
+                        �
+                                                             
+ 5. Call execute-code to run and get results                
+                                                             
+```
+
+**NEVER:**
+- L Call `execute-code` without first calling `get-code-file-interface`
+- L Skip reading the interface definition
+- L Write incomplete code without imports or error handling
+- L Guess at parameter types or names
+- L Use deprecated patterns like PostCharges
+
+**ALWAYS:**
+-  Call `get-code-file-interface` before writing code
+-  Write complete, executable TypeScript code
+-  Include proper imports and Stripe client setup
+-  Use correct parameter types from the interface
+-  Handle errors gracefully
+-  Execute code and verify results
+
+Remember: The code wrapper files are self-contained with inline type definitions. Use them to write type-safe, executable code that makes real Stripe API calls!
