@@ -16,14 +16,10 @@ this is a prototype of an mcp server that dynamically populates 176 (out of 572)
 - call tools in this sequence: list-api-endpoints, then get-api-endpoint-schema, then invoke-api-endpoint
 - adhering to "deprecated" or best-practice descriptions in the OpenAPI spec
 
-### results
+### example
 
-Manual testing:
-
-✅ Prompt: `update the prices of all my products to be 10 dollars more than they are` (5-6 step workflow):
+Prompt: `update the prices of all my products to be 10 dollars more than they are` (5-6 step workflow):
 - [sample output](https://gist.github.com/tomchen-stripe/979642e8ff35a0299e7e675b597bfe48)
-
-Next steps are to run more evals for this approach.
 
 ### using with claude code (laptop or devbox)
 
@@ -56,24 +52,16 @@ npm run build
 npm run start streamableHttp
 ```
 
-- on the same devbox in another terminal:
-   - follow [this](https://trailhead.corp.stripe.com/docs/developer-ai/mcp/evaluating-agent-toolkit-and-mcp#how-to-run-evals) to set your `.env`
-```bash
-cd /pay/src/pay-server/lib/mcp_stripe/evals
-nodenv local 24.9.0 && nodenv rehash
-pay js install
-npm run build
+Then follow: https://stripe.sourcegraphcloud.com/stripe-internal/pay-server/-/blob/lib/mcp_stripe/evals/README.md
 
-pay js:run eval --cwd=//lib/mcp_stripe/evals --localhost-mcp
+### usage arguments
+
+```bash
+npm run start <stdio|streamableHttp> <static|dynamic>
 ```
 
-### further areas of investigation for this approach
+`<stdio|streamableHttp>`: protocol to talk to MCP server (default: stdio)
 
-- will we run into token (context window or response size) limits
-   - short answer: not for sota 2025+ models, but yes for older 2024- models, [results here](https://github.com/tomchen-stripe/mcp-server-response-token-sizes)
-- running evals on how good newer/sota models are parsing and following complex OpenAPI schemas
-- running evals on how good newer/sota models are at orchestrating the right tools in a world where there are hundred
-   - if there are workflows that are hard for the LLM to orchestrate, can we just provide a MCP tool that does it?
-- how do different sota models (gpt family, anthropic family, etc) perform?
-- how do we guard more destructive calls with dynamic mcp tools 
-- can we get this to work well with older models like gpt-4.1 or do we preserve the old experience for older models?
+`<static|dynamic>`: 
+   * static (default): all 176 tools are listed statically during `tools/list` response
+   * dynamic: all 176 tools are returned in a response from the static `list-api-endpoints` tool during `tools/list` response

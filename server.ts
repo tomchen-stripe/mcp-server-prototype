@@ -35,6 +35,9 @@ import Stripe from "stripe";
 import dotenv from "dotenv";
 import { HttpsProxyAgent } from "https-proxy-agent";
 
+const args = process.argv.slice(2);
+const discoveryMode = args[0] || 'dynamic';
+
 // Load environment variables from .env file
 dotenv.config();
 
@@ -104,11 +107,9 @@ function extractInputSchema(operation: any): any {
 export const createServer = () => {
   console.error("[MCP DEBUG] createServer called");
   // Load instructions and spec
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const instructionsPath = join(__dirname, "instructions.txt");
+  const instructionsPath = join(process.cwd(), "instructions.txt");
   const instructions = readFileSync(instructionsPath, "utf-8");
-  const specPath = join(__dirname, "data", "spec3.clean.json");
+  const specPath = join(process.cwd(), "data", "spec3.clean.json");
   const spec = JSON.parse(readFileSync(specPath, "utf-8"));
   console.error("[MCP DEBUG] Loaded spec and instructions");
 
@@ -131,7 +132,7 @@ export const createServer = () => {
         logging: {},
         completions: {},
       },
-      instructions: instructions,
+      instructions,
     }
   );
   console.error("[MCP DEBUG] Server instance created");
@@ -183,8 +184,8 @@ export const createServer = () => {
   }
 
   // Helper to list all operation IDs from the spec
-  function listAllOperationIds(): string[] {
-    const operationIds: string[] = [];
+  function listAllOperations(): Array<{ operationId: string; description: string }> {
+    const operations: Array<{ operationId: string; description: string }> = [];
 
     for (const [path, pathItem] of Object.entries(spec.paths || {})) {
       if (!topLevelRegex.test(path) && !detailLevelRegex.test(path)) continue;
@@ -192,12 +193,15 @@ export const createServer = () => {
       for (const method of httpMethods) {
         const operation = (pathItem as any)[method];
         if (operation && operation.operationId) {
-          operationIds.push(operation.operationId);
+          operations.push({
+            operationId: operation.operationId,
+            description: operation.description || ""
+          });
         }
       }
     }
 
-    return operationIds;
+    return operations;
   }
 
   // Helper to get operation schema by operationId
@@ -355,17 +359,6 @@ export const createServer = () => {
     console.error("[MCP DEBUG] ListTools request received");
     const tools: Tool[] = [
       {
-        name: "list-api-endpoints",
-        description: `Search available Stripe API endpoints. Returns matching endpoints with brief descriptions.
-
-        Common categories: payments, customers, subscriptions, invoices, refunds, disputes, payouts,
-        billing, checkout, terminal, identity, radar, documentation, search, launchpad.
-
-        Use this tool to discover which endpoints are available before calling get-api-endpoint-schema
-        to learn more about specific endpoints.`,
-        inputSchema: zodToJsonSchema(z.object({})) as ToolInput,
-      },
-      {
         name: "get-api-endpoint-schema",
         description: `Get detailed schema and documentation for one or more API endpoints.
 
@@ -403,22 +396,51 @@ export const createServer = () => {
       },
     ];
 
+    if (discoveryMode === 'dynamic') {
+      tools.push({
+        name: "list-api-endpoints",
+        description: `Search available Stripe API endpoints. Returns matching endpoints with brief descriptions.
+
+        Common categories: payments, customers, subscriptions, invoices, refunds, disputes, payouts,
+        billing, checkout, terminal, identity, radar, documentation, search, launchpad.
+
+        Use this tool to discover which endpoints are available before calling get-api-endpoint-schema
+        to learn more about specific endpoints.`,
+        inputSchema: zodToJsonSchema(z.object({})) as ToolInput,
+      });
+    } else { 
+      // discoveryMode is static
+      const operations = listAllOperations();
+      for (const operation of operations) {
+        tools.push({
+          name: operation.operationId,
+          description: operation.description,
+          inputSchema: zodToJsonSchema(z.object({})) as ToolInput,
+        });
+      }
+    }
+
     console.error(`[MCP DEBUG] Returning ${tools.length} tools`);
     return { tools };
   });
 
   // Helper to handle the list-api-endpoints tool
-  function handleListApiEndpointsTool() {
-    console.error("[MCP DEBUG] handleListApiEndpointsTool called");
-    const operationIds = listAllOperationIds();
-    console.error(`[MCP DEBUG] Found ${operationIds.length} operation IDs`);
+  function handleDynamicListApiEndpointTool() {
+    console.error("[MCP DEBUG] handleDynamicListApiEndpointTool called");
+    const operations = listAllOperations();
+    console.error(`[MCP DEBUG] Found ${operations.length} operation IDs`);
+
+    // Format the operations as a readable list
+    const sortedOperations = operations.sort((a, b) => a.operationId.localeCompare(b.operationId));
+    const formattedList = sortedOperations
+      .map(op => `${op.operationId}: ${op.description}`)
+      .join("\n");
+
     return {
       content: [
         {
           type: "text",
-          text: `Available API endpoints (${
-            operationIds.length
-          } total): ${operationIds.sort().join(", ")}`,
+          text: `Available API endpoints (${operations.length} total):\n\n${formattedList}`,
           description: `Use the get-api-endpoint-schema tool to get the schema for a given API endpoint as input into invoke-api-endpoint. Call this before invoke-api-endpoint.`,
         },
       ],
@@ -572,7 +594,7 @@ export const createServer = () => {
     let result;
     switch (name) {
       case "list-api-endpoints":
-        result = handleListApiEndpointsTool();
+        result = handleDynamicListApiEndpointTool();
         break;
       case "get-api-endpoint-schema":
         result = handleGetApiEndpointSchemaTool(args);
