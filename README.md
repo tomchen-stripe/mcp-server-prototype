@@ -62,6 +62,7 @@ npm run start <stdio|streamableHttp> <static|dynamic>
 
 `<stdio|streamableHttp>`: protocol to talk to MCP server (default: stdio)
 
-`<static|dynamic>`: 
+`<static|dynamic|code>`: 
    * static (default): all 176 tools are listed statically during `tools/list` response
    * dynamic: all 176 tools are returned in a response from the static `list-api-endpoints` tool during `tools/list` response
+   * code: [code execution](https://www.anthropic.com/engineering/code-execution-with-mcp)
